@@ -22,26 +22,15 @@ from lerobot.teleoperators import Teleoperator
 
 import logging
 import time
-from dataclasses import asdict, dataclass, field
-from pathlib import Path
-from pprint import pformat
 from typing import Any
 
 from lerobot.cameras import (  # noqa: F401
     CameraConfig,  # noqa: F401
 )
 from lerobot.cameras.opencv.configuration_opencv import OpenCVCameraConfig  # noqa: F401
-from lerobot.cameras.realsense.configuration_realsense import RealSenseCameraConfig  # noqa: F401
-from lerobot.configs import parser
-from lerobot.configs.policies import PreTrainedConfig
 from lerobot.datasets.image_writer import safe_stop_image_writer
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
-from lerobot.datasets.pipeline_features import aggregate_pipeline_dataset_features, create_initial_features
-from lerobot.datasets.utils import build_dataset_frame, combine_feature_dicts
-from lerobot.datasets.video_utils import VideoEncodingManager
-from lerobot.policies.factory import make_policy, make_pre_post_processors
-from lerobot.policies.pretrained import PreTrainedPolicy
-from lerobot.policies.utils import make_robot_action
+from lerobot.datasets.utils import build_dataset_frame
 from lerobot.processor import (
     PolicyAction,
     PolicyProcessorPipeline,
@@ -49,44 +38,26 @@ from lerobot.processor import (
     RobotObservation,
     RobotProcessorPipeline,
     make_default_processors,
-    IdentityProcessorStep,
 )
-from lerobot.processor.rename_processor import rename_stats
-from lerobot.robots import (  # noqa: F401
-    so101_follower,
-)
-from lerobot.teleoperators import (  # noqa: F401
-    so101_leader,
-    koch_leader,
-    so100_leader,
-)
-from lerobot.teleoperators.keyboard.teleop_keyboard import KeyboardTeleop
 from lerobot.utils.constants import ACTION, OBS_STR
 from lerobot.utils.control_utils import (
     is_headless,
-    predict_action,
-    sanity_check_dataset_name,
-    sanity_check_dataset_robot_compatibility,
 )
-from lerobot.utils.import_utils import register_third_party_devices
 from lerobot.utils.robot_utils import busy_wait
 from lerobot.utils.utils import (
-    get_safe_torch_device,
-    init_logging,
     log_say,
 )
 from lerobot.utils.visualization_utils import init_rerun, log_rerun_data
 
 
-NUM_EPISODES = 1 
+NUM_EPISODES = 20 
 FPS = 30
 EPISODE_TIME_SEC = 5
-RESET_TIME_SEC = 8
+RESET_TIME_SEC = 4
 TASK_DESCRIPTION = "My task description"
 
 import sys
 import termios
-import tty
 import select
 import time
 
@@ -225,6 +196,7 @@ def record_loop(
 
     timestamp = 0
     start_episode_t = time.perf_counter()
+    previous_keyboard_state = None  # Track previous keyboard state for change detection
     while timestamp < control_time_s:
         start_loop_t = time.perf_counter()
 
@@ -262,7 +234,12 @@ def record_loop(
             keyboard_state = np.array([1.0], dtype=np.float32)  # 'p' key is pressed
         else:
             keyboard_state = np.array([0.0], dtype=np.float32)  # 'p' key is not pressed
-        print(f"Keyboard state: {keyboard_state}")
+
+        # Print only when keyboard state changes
+        if previous_keyboard_state is None or not np.array_equal(keyboard_state, previous_keyboard_state):
+            state_label = "PRESSED" if keyboard_state[0] == 1.0 else "RELEASED"
+            print(f"Keyboard state changed: 'p' key {state_label}")
+            previous_keyboard_state = keyboard_state.copy()
 
         # Write to dataset
         if dataset is not None:
@@ -405,6 +382,7 @@ def main():
     log_say(f"Starting record loop for {args.num_episodes} episodes")
     time.sleep(1) # Short delay before starting
     while episode_idx < args.num_episodes and not events["stop_recording"]:
+        print(f"\n=== Starting episode {episode_idx + 1}/{args.num_episodes} ===")
         beep(1)  # Beep once at episode start
 
         
@@ -438,6 +416,7 @@ def main():
                 single_task=args.task_description,
                 display_data=True,
             )
+            log_say("Environment reset complete")
 
 
         dataset.save_episode()
