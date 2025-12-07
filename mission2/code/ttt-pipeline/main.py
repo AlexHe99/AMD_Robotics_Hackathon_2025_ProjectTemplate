@@ -220,17 +220,25 @@ def main() -> int:
             now = time.monotonic()
 
             if now - last_inference_time >= args.interval:
-                board_state, ordered_cells = detect_board_state(
-                    frame,
-                    model,
-                    conf=args.conf,
-                    device=args.device,
-                    max_det=args.max_det,
-                    grayscale=args.grayscale,
-                    clahe=args.clahe,
-                    contrast_alpha=args.contrast_alpha,
-                    contrast_beta=args.contrast_beta,
-                )
+                try:
+                    board_state, ordered_cells = detect_board_state(
+                        frame,
+                        model,
+                        conf=args.conf,
+                        device=args.device,
+                        max_det=args.max_det,
+                        grayscale=args.grayscale,
+                        clahe=args.clahe,
+                        contrast_alpha=args.contrast_alpha,
+                        contrast_beta=args.contrast_beta,
+                    )
+                except Exception as exc:
+                    sys.stderr.write(
+                        "[warn] Board detection raised an exception; skipping this interval. "
+                        f"err={exc} | conf={args.conf} device={args.device} max_det={args.max_det} "
+                        f"frame_shape={frame.shape if frame is not None else 'None'}\n"
+                    )
+                    board_state, ordered_cells = None, None
                 last_inference_time = now
                 if board_state and ordered_cells:
                     state_map = board_state.state_map
@@ -252,7 +260,11 @@ def main() -> int:
                         if args.save_state:
                             save_board_state(board_state, json_path=Path(args.save_state), text_path=None)
                 else:
-                    sys.stderr.write("[warn] Board detection failed; skipping this interval.\n")
+                    sys.stderr.write(
+                        "[warn] Board detection failed; skipping this interval. "
+                        f"state={board_state is not None} ordered_cells={bool(ordered_cells)} "
+                        f"frame_shape={frame.shape if frame is not None else 'None'}\n"
+                    )
 
             output_frame = frame
             if target_bbox:
