@@ -5,6 +5,8 @@
 ## Team Information
 
 **Team:** *Your team number, name of your team, and members*
+Team Name: Inverse Kinema-tricks
+Members: Xiao Feng, Giacomo Randazzo, Nicolas Rodriguez
 
 **Summary:** *A brief description of your work*
 
